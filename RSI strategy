@@ -1,0 +1,94 @@
+"""
+bot/strategies/rsi_strategy.py
+================================
+Strategy 2 — RSI Mean Reversion
+
+Logic:
+  BUY  → RSI crosses below oversold_level (default 30)
+  SELL → RSI crosses above overbought_level (default 70)
+
+Confirmation filters:
+  • trend_filter  — only enter long when price > SMA(200)
+  • volume_filter — only enter when volume > 20-day average volume
+"""
+
+import backtrader.indicators as btind
+from .base import BaseStrategy
+
+
+class RSIStrategy(BaseStrategy):
+    """
+    RSI mean-reversion strategy with optional trend and volume filters.
+
+    Params:
+        rsi_period       (int):   RSI calculation period       (default 14)
+        oversold_level   (float): RSI level to trigger BUY     (default 30)
+        overbought_level (float): RSI level to trigger SELL    (default 70)
+        trend_filter     (bool):  Require price > SMA(200)     (default True)
+        volume_filter    (bool):  Require vol > 20-day avg vol (default True)
+        vol_ma_period    (int):   Volume moving avg period     (default 20)
+        risk_pct         (float): Portfolio fraction per trade  (default 0.20)
+        stop_pct         (float): Hard stop-loss below entry   (default 0.03)
+        trail_pct        (float): Trailing stop percentage     (default 0.00)
+        printlog         (bool):  Print trade log to console   (default True)
+    """
+
+    params = dict(
+        rsi_period       = 14,
+        oversold_level   = 30,
+        overbought_level = 70,
+        trend_filter     = True,
+        volume_filter    = True,
+        vol_ma_period    = 20,
+        risk_pct         = 0.20,
+        stop_pct         = 0.03,
+        trail_pct        = 0.00,
+        printlog         = True,
+    )
+
+    def __init__(self):
+        super().__init__()
+        self.rsi    = btind.RSI(self.data.close, period=self.p.rsi_period,
+                                safediv=True)
+        self.sma200 = btind.SMA(self.data.close, period=200)
+        self.vol_ma = btind.SMA(self.data.volume, period=self.p.vol_ma_period)
+
+        # CrossDown: RSI moves from ≥ oversold → below oversold  → BUY signal
+        self.rsi_oversold   = btind.CrossDown(self.rsi, self.p.oversold_level)
+        # CrossUp:   RSI moves from ≤ overbought → above overbought → SELL signal
+        self.rsi_overbought = btind.CrossUp(self.rsi, self.p.overbought_level)
+
+    # ── filters ───────────────────────────────────────────────────
+
+    def _trend_ok(self) -> bool:
+        if not self.p.trend_filter:
+            return True
+        return self.data.close[0] > self.sma200[0]
+
+    def _volume_ok(self) -> bool:
+        if not self.p.volume_filter:
+            return True
+        return self.data.volume[0] > self.vol_ma[0]
+
+    # ── bar logic ─────────────────────────────────────────────────
+
+    def next(self):
+        super().next()
+        if self.order:
+            return
+
+        if not self.position:
+            if self.rsi_oversold and self._trend_ok() and self._volume_ok():
+                self.log(
+                    f"  BUY  signal  price={self.data.close[0]:.2f}  "
+                    f"RSI={self.rsi[0]:.1f}"
+                )
+                self.order = self.buy(size=self._size())
+        else:
+            if self.rsi_overbought:
+                self._cancel_stop()
+                self.log(
+                    f"  SELL signal  price={self.data.close[0]:.2f}  "
+                    f"RSI={self.rsi[0]:.1f}"
+                )
+                self.order = self.sell(size=self.position.size)
