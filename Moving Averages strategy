@@ -1,0 +1,61 @@
+"""
+bot/strategies/ma_cross.py
+==========================
+Strategy 1 — Moving Average Crossover
+
+Logic:
+  BUY  → short SMA crosses above long SMA  (golden cross)
+  SELL → short SMA crosses below long SMA  (death cross)
+"""
+
+import backtrader as bt
+import backtrader.indicators as btind
+from .base import BaseStrategy
+
+
+class MACrossStrategy(BaseStrategy):
+    """
+    Dual-SMA crossover strategy.
+
+    Params:
+        short_period (int):  Fast SMA window (default 10)
+        long_period  (int):  Slow SMA window (default 40)
+        risk_pct   (float):  Portfolio fraction per position (default 0.20)
+        stop_pct   (float):  Hard stop-loss below entry   (default 0.03)
+        trail_pct  (float):  Trailing stop percentage     (default 0.00)
+        printlog   (bool):   Print trade log to console   (default True)
+    """
+
+    params = dict(
+        short_period = 10,
+        long_period  = 40,
+        risk_pct     = 0.20,
+        stop_pct     = 0.03,
+        trail_pct    = 0.00,
+        printlog     = True,
+    )
+
+    def __init__(self):
+        super().__init__()
+        self.sma_short = btind.SMA(self.data.close, period=self.p.short_period)
+        self.sma_long  = btind.SMA(self.data.close, period=self.p.long_period)
+        self.crossover = btind.CrossOver(self.sma_short, self.sma_long)
+
+    def next(self):
+        super().next()
+        if self.order:
+            return
+
+        if not self.position:
+            if self.crossover > 0:
+                self.log(
+                    f"  BUY  signal  price={self.data.close[0]:.2f}  "
+                    f"SMA{self.p.short_period}={self.sma_short[0]:.2f}  "
+                    f"SMA{self.p.long_period}={self.sma_long[0]:.2f}"
+                )
+                self.order = self.buy(size=self._size())
+        else:
+            if self.crossover < 0:
+                self._cancel_stop()
+                self.log(f"  SELL signal  price={self.data.close[0]:.2f}")
+                self.order = self.sell(size=self.position.size)
