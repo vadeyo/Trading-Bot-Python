@@ -1,0 +1,1 @@
+mkdir -p /home/claude/trading_bot_repo/bot && touch /home/claude/trading_bot_repo/bot/__init__.py && echo "done"
