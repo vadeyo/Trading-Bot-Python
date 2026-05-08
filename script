@@ -1,0 +1,1 @@
+mkdir -p /home/claude/trading_bot_repo/{strategies,utils,tests} && echo "done"
