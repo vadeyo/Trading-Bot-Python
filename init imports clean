@@ -1,0 +1,11 @@
+from .ma_cross          import MACrossStrategy
+from .rsi_strategy      import RSIStrategy
+from .zipline_momentum  import ZiplineMomentumStrategy
+
+STRATEGY_MAP = {
+    "ma":      MACrossStrategy,
+    "rsi":     RSIStrategy,
+    "zipline": ZiplineMomentumStrategy,
+}
+
+__all__ = ["MACrossStrategy", "RSIStrategy", "ZiplineMomentumStrategy", "STRATEGY_MAP"]
