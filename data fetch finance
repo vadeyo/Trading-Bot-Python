@@ -1,0 +1,43 @@
+"""
+bot/data.py
+===========
+Data fetching via yfinance.
+"""
+
+import yfinance as yf
+import pandas as pd
+
+
+def fetch_data(ticker: str, start: str, end: str) -> pd.DataFrame:
+    """
+    Download OHLCV data from Yahoo Finance and return a clean DataFrame.
+
+    Args:
+        ticker: Yahoo Finance symbol, e.g. "RELIANCE.NS", "TCS.NS", "AAPL"
+        start:  Start date string "YYYY-MM-DD"
+        end:    End date string   "YYYY-MM-DD"
+
+    Returns:
+        DataFrame with columns [Open, High, Low, Close, Volume]
+
+    Raises:
+        ValueError: if no data is returned for the ticker/date range
+    """
+    print(f"\nFetching {ticker}  {start} → {end} …")
+    raw = yf.download(ticker, start=start, end=end,
+                      auto_adjust=True, progress=False)
+
+    if raw.empty:
+        raise ValueError(
+            f"No data returned for '{ticker}'. "
+            f"Check the symbol and date range."
+        )
+
+    # yfinance may return MultiIndex columns — flatten
+    if isinstance(raw.columns, pd.MultiIndex):
+        raw.columns = raw.columns.get_level_values(0)
+
+    df = raw[["Open", "High", "Low", "Close", "Volume"]].copy()
+    df.dropna(inplace=True)
+    print(f"  Loaded {len(df)} trading days.")
+    return df
