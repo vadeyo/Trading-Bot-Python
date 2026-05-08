@@ -1,0 +1,172 @@
+"""
+bot/plot.py
+===========
+Visualisation helpers — individual strategy charts and comparison overlay.
+"""
+
+import numpy as np
+import pandas as pd
+import matplotlib
+matplotlib.use("Agg")           # headless; change to "TkAgg" for interactive
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+
+
+# ── shared axis styling ───────────────────────────────────────────────────────
+
+def _style_ax(ax):
+    ax.set_facecolor("#FAFAFA")
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.spines[["left", "bottom"]].set_color("#CCCCCC")
+    ax.tick_params(colors="#555555", labelsize=9)
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b '%y"))
+    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+    plt.setp(ax.get_xticklabels(), rotation=30, ha="right")
+
+
+# ── per-strategy 3-panel chart ────────────────────────────────────────────────
+
+def plot_backtest(equity_curve, df, initial_cash,
+                  strategy_name, label, ticker):
+    """
+    Three-panel chart:
+      Panel 1 — equity curve vs buy-and-hold
+      Panel 2 — price + indicator specific to the strategy
+      Panel 3 — rolling drawdown
+    """
+    if not equity_curve:
+        print("  No equity curve to plot.")
+        return
+
+    dates, values = zip(*equity_curve)
+    date_set      = set(dates)
+
+    # buy-and-hold benchmark aligned to equity curve dates
+    bh = [
+        initial_cash * (df["Close"].iloc[i] / df["Close"].iloc[0])
+        for i in range(len(df))
+        if df.index[i].date() in date_set
+    ][:len(dates)]
+
+    fig, axes = plt.subplots(
+        3, 1, figsize=(12, 10),
+        gridspec_kw={"height_ratios": [3, 1.5, 1.5]}
+    )
+    fig.suptitle(f"{label}  ·  {ticker}", fontsize=13, fontweight="bold", y=0.98)
+    fig.patch.set_facecolor("#F8F8F8")
+    for ax in axes:
+        _style_ax(ax)
+
+    # ── Panel 1: equity curve ─────────────────────────────────────
+    ax1 = axes[0]
+    ax1.plot(dates, values, color="#185FA5", linewidth=1.8, label="Strategy")
+    ax1.plot(dates, bh,     color="#888780", linewidth=1,
+             linestyle="--", label="Buy & hold")
+    ax1.axhline(initial_cash, color="#CCCCCC", linewidth=0.8, linestyle=":")
+    ax1.set_ylabel("Portfolio value (₹)", fontsize=9, color="#555555")
+    ax1.legend(fontsize=9, framealpha=0.6)
+    ax1.yaxis.set_major_formatter(
+        plt.FuncFormatter(lambda x, _: f"₹{x/1000:.0f}K")
+    )
+
+    # ── Panel 2: strategy-specific indicator ──────────────────────
+    ax2    = axes[1]
+    pdates = [d.date() if hasattr(d, "date") else d for d in df.index]
+    close  = df["Close"].values
+
+    if strategy_name == "ma":
+        ax2.plot(pdates, close,
+                 color="#444444", lw=1, label="Price")
+        ax2.plot(pdates, pd.Series(close).rolling(10).mean(),
+                 color="#D85A30", lw=1.2, label="SMA10")
+        ax2.plot(pdates, pd.Series(close).rolling(40).mean(),
+                 color="#185FA5", lw=1.2, label="SMA40")
+        ax2.set_ylabel("Price (₹)", fontsize=9, color="#555555")
+        ax2.legend(fontsize=8, framealpha=0.6, ncol=3)
+
+    elif strategy_name == "rsi":
+        delta = pd.Series(close).diff()
+        gain  = delta.clip(lower=0).rolling(14).mean()
+        loss  = (-delta.clip(upper=0)).rolling(14).mean()
+        rsi   = (100 - 100 / (1 + gain / loss)).values
+        ax2.plot(pdates, rsi, color="#534AB7", lw=1.2, label="RSI(14)")
+        ax2.axhline(70, color="#A32D2D", lw=0.8, linestyle="--", alpha=0.7)
+        ax2.axhline(30, color="#3B6D11", lw=0.8, linestyle="--", alpha=0.7)
+        ax2.fill_between(pdates, rsi, 70,
+                         where=[r > 70 for r in rsi],
+                         color="#FCEBEB", alpha=0.5)
+        ax2.fill_between(pdates, rsi, 30,
+                         where=[r < 30 for r in rsi],
+                         color="#EAF3DE", alpha=0.5)
+        ax2.set_ylabel("RSI", fontsize=9, color="#555555")
+        ax2.set_ylim(0, 100)
+        ax2.legend(fontsize=8, framealpha=0.6)
+
+    elif strategy_name == "zipline":
+        mom12 = pd.Series(close).pct_change(252).values * 100
+        mom3  = pd.Series(close).pct_change(63).values  * 100
+        ax2.plot(pdates, mom12, color="#185FA5", lw=1.2, label="Mom 12M (%)")
+        ax2.plot(pdates, mom3,  color="#D85A30", lw=1.0,
+                 linestyle="--", label="Mom 3M (%)")
+        ax2.axhline(5, color="#3B6D11", lw=0.8, linestyle=":", alpha=0.8)
+        ax2.axhline(0, color="#888780", lw=0.8, alpha=0.5)
+        ax2.set_ylabel("Momentum (%)", fontsize=9, color="#555555")
+        ax2.legend(fontsize=8, framealpha=0.6)
+
+    # ── Panel 3: drawdown ─────────────────────────────────────────
+    ax3         = axes[2]
+    vals_arr    = np.array(values)
+    running_max = np.maximum.accumulate(vals_arr)
+    dd_pct      = (vals_arr - running_max) / running_max * 100
+    ax3.fill_between(dates, dd_pct, 0, color="#E24B4A", alpha=0.35)
+    ax3.plot(dates, dd_pct, color="#A32D2D", lw=0.8)
+    ax3.set_ylabel("Drawdown (%)", fontsize=9, color="#555555")
+
+    plt.tight_layout(rect=[0, 0, 1, 0.97])
+    fname = f"backtest_{strategy_name}_{ticker.replace('.', '_')}.png"
+    plt.savefig(fname, dpi=150, bbox_inches="tight")
+    print(f"  Chart saved → {fname}")
+    plt.close()
+
+
+# ── comparison overlay ────────────────────────────────────────────────────────
+
+def plot_comparison(all_curves, initial_cash, ticker, start, end):
+    """Overlay equity curves of all strategies on a single chart."""
+    colors = {
+        "ma":      "#185FA5",
+        "rsi":     "#534AB7",
+        "zipline": "#0F6E56",
+    }
+    labels = {
+        "ma":      "MA Crossover",
+        "rsi":     "RSI Reversion",
+        "zipline": "Zipline Momentum",
+    }
+
+    fig, ax = plt.subplots(figsize=(12, 5))
+    fig.patch.set_facecolor("#F8F8F8")
+    _style_ax(ax)
+
+    for name, curve in all_curves.items():
+        if not curve:
+            continue
+        dates, values = zip(*curve)
+        ax.plot(dates, values, color=colors[name], lw=1.8, label=labels[name])
+
+    ax.axhline(initial_cash, color="#CCCCCC", lw=0.8, linestyle=":")
+    ax.set_title(
+        f"Strategy Comparison  ·  {ticker}  ·  {start} → {end}",
+        fontsize=12, fontweight="bold"
+    )
+    ax.set_ylabel("Portfolio value (₹)", fontsize=9, color="#555555")
+    ax.yaxis.set_major_formatter(
+        plt.FuncFormatter(lambda x, _: f"₹{x/1000:.0f}K")
+    )
+    ax.legend(fontsize=9, framealpha=0.6)
+
+    plt.tight_layout()
+    fname = f"comparison_{ticker.replace('.', '_')}.png"
+    plt.savefig(fname, dpi=150, bbox_inches="tight")
+    print(f"  Comparison chart saved → {fname}")
+    plt.close()
