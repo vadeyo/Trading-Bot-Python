@@ -1,0 +1,137 @@
+"""
+bot/strategies/zipline_momentum.py
+====================================
+Strategy 3 — Zipline-style Dual Momentum
+
+Replicates the logic of Zipline's classic dual-momentum Pipeline in backtrader
+so it can be used on NSE / BSE data via yfinance.
+
+Zipline Pipeline logic (Gary Antonacci's dual-momentum framework):
+  1. 12-month momentum  = close / close[252] - 1   (long-term trend)
+  2. 1-month reversal   = close / close[21]  - 1   (mean-reversion filter)
+  3. 3-month accel.     = close / close[63]  - 1   (acceleration confirmation)
+
+BUY when:
+  • 12-month momentum > momentum_threshold  (e.g. 5%)
+  • 1-month return    < reversal_threshold  (e.g. 10%) — avoid chasing surges
+  • 3-month momentum  > 0                  — trend still accelerating
+
+SELL when:
+  • 12-month momentum turns negative  OR
+  • 1-month return    > exit_reversal (e.g. 15%) — parabolic move, take profit
+
+Position sizing:
+  • ATR-based (replicates Zipline's RiskModelExposure):
+    qty = (portfolio × risk_pct) / (2 × ATR)
+
+Rebalancing:
+  • Only re-evaluates every rebalance_days bars (default 21 = monthly)
+  • Mirrors Zipline's scheduled_function / before_trading_start pattern
+"""
+
+import backtrader.indicators as btind
+from .base import BaseStrategy
+
+
+class ZiplineMomentumStrategy(BaseStrategy):
+    """
+    Zipline-style dual-momentum strategy implemented in backtrader.
+
+    Params:
+        mom_period          (int):   12-month lookback in trading days (default 252)
+        rev_period          (int):   1-month reversal lookback          (default 21)
+        acc_period          (int):   3-month acceleration lookback      (default 63)
+        atr_period          (int):   ATR period for vol sizing          (default 14)
+        momentum_threshold  (float): Min 12M momentum to enter         (default 0.05)
+        reversal_threshold  (float): Max 1M return to enter            (default 0.10)
+        exit_reversal       (float): 1M return that triggers exit      (default 0.15)
+        rebalance_days      (int):   Re-evaluate every N bars          (default 21)
+        risk_pct            (float): Portfolio fraction per position    (default 0.20)
+        stop_pct            (float): Hard stop-loss below entry        (default 0.04)
+        trail_pct           (float): Trailing stop percentage          (default 0.06)
+        printlog            (bool):  Print trade log to console        (default True)
+    """
+
+    params = dict(
+        mom_period         = 252,
+        rev_period         = 21,
+        acc_period         = 63,
+        atr_period         = 14,
+        momentum_threshold = 0.05,
+        reversal_threshold = 0.10,
+        exit_reversal      = 0.15,
+        rebalance_days     = 21,
+        risk_pct           = 0.20,
+        stop_pct           = 0.04,
+        trail_pct          = 0.06,
+        printlog           = True,
+    )
+
+    def __init__(self):
+        super().__init__()
+        self.atr   = btind.ATR(self.data, period=self.p.atr_period)
+        self.mom12 = btind.PctChange(self.data.close, period=self.p.mom_period)
+        self.mom1  = btind.PctChange(self.data.close, period=self.p.rev_period)
+        self.mom3  = btind.PctChange(self.data.close, period=self.p.acc_period)
+        self._bar  = 0
+
+    # ── ATR-based position sizing ─────────────────────────────────
+
+    def _atr_size(self) -> int:
+        """
+        Volatility-adjusted size (Zipline's RiskModelExposure equivalent).
+        Risk a fixed dollar amount; per-share risk = 2 × ATR.
+        """
+        atr = self.atr[0]
+        if atr <= 0:
+            return self._size()
+        dollar_risk    = self.broker.getvalue() * self.p.risk_pct
+        risk_per_share = atr * 2
+        return max(1, int(dollar_risk / risk_per_share))
+
+    # ── signal logic ──────────────────────────────────────────────
+
+    def _entry_signal(self) -> bool:
+        return (
+            self.mom12[0] > self.p.momentum_threshold
+            and self.mom1[0] < self.p.reversal_threshold
+            and self.mom3[0] > 0
+        )
+
+    def _exit_signal(self) -> bool:
+        return (
+            self.mom12[0] < 0
+            or self.mom1[0] > self.p.exit_reversal
+        )
+
+    # ── bar logic ─────────────────────────────────────────────────
+
+    def next(self):
+        super().next()
+        self._bar += 1
+
+        # Only act on rebalance days — mirrors Zipline's scheduled rebalance
+        if self._bar % self.p.rebalance_days != 0:
+            return
+
+        if self.order:
+            return
+
+        if not self.position:
+            if self._entry_signal():
+                qty = self._atr_size()
+                self.log(
+                    f"  BUY  signal  price={self.data.close[0]:.2f}  "
+                    f"mom12={self.mom12[0]*100:.1f}%  "
+                    f"mom1={self.mom1[0]*100:.1f}%  "
+                    f"size={qty}"
+                )
+                self.order = self.buy(size=qty)
+        else:
+            if self._exit_signal():
+                self._cancel_stop()
+                self.log(
+                    f"  SELL signal  price={self.data.close[0]:.2f}  "
+                    f"mom12={self.mom12[0]*100:.1f}%"
+                )
+                self.order = self.sell(size=self.position.size)
