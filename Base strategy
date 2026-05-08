@@ -1,0 +1,109 @@
+"""
+bot/strategies/base.py
+======================
+Shared base class for all strategies.
+Handles order lifecycle, stop-loss management, equity curve, and position sizing.
+"""
+
+import backtrader as bt
+
+
+class BaseStrategy(bt.Strategy):
+    """
+    Common plumbing inherited by every strategy:
+      - Unified order / trade logging
+      - Automatic stop-loss and trailing-stop placement
+      - Equity curve collection (list of (date, portfolio_value) tuples)
+      - Risk-based position sizing
+    """
+
+    params = dict(
+        risk_pct  = 0.20,   # fraction of portfolio to risk per position
+        stop_pct  = 0.03,   # hard stop-loss percentage below entry
+        trail_pct = 0.00,   # trailing stop percentage — 0 to disable
+        printlog  = True,
+    )
+
+    def __init__(self):
+        self.order        = None
+        self.stop_order   = None
+        self.buy_price    = None
+        self.equity_curve = []   # [(date, value), ...]
+
+    # ── helpers ───────────────────────────────────────────────────
+
+    def log(self, txt, dt=None):
+        if self.p.printlog:
+            dt = dt or self.datas[0].datetime.date(0)
+            print(f"[{dt}]  {txt}")
+
+    def _cancel_stop(self):
+        if self.stop_order:
+            self.cancel(self.stop_order)
+            self.stop_order = None
+
+    def _size(self):
+        """Shares to buy = (portfolio_value × risk_pct) / current_price."""
+        return max(1, int(
+            self.broker.getvalue() * self.p.risk_pct / self.data.close[0]
+        ))
+
+    def _place_stop(self):
+        """Place a hard or trailing stop immediately after a buy fills."""
+        if self.p.trail_pct:
+            self.stop_order = self.sell(
+                exectype=bt.Order.StopTrail,
+                trailpercent=self.p.trail_pct,
+            )
+        elif self.p.stop_pct:
+            self.stop_order = self.sell(
+                exectype=bt.Order.Stop,
+                price=self.buy_price * (1 - self.p.stop_pct),
+            )
+
+    # ── order lifecycle ───────────────────────────────────────────
+
+    def notify_order(self, order):
+        if order.status in [order.Submitted, order.Accepted]:
+            return
+
+        if order.status == order.Completed:
+            if order.isbuy():
+                self.buy_price = order.executed.price
+                self.log(
+                    f"  BUY  executed  price={order.executed.price:.2f}  "
+                    f"size={order.executed.size:.0f}  "
+                    f"comm={order.executed.comm:.2f}"
+                )
+                self._place_stop()
+            else:
+                pnl = (order.executed.price - (self.buy_price or 0)) \
+                      * order.executed.size
+                self.log(
+                    f"  SELL executed  price={order.executed.price:.2f}  "
+                    f"size={order.executed.size:.0f}  "
+                    f"P&L={pnl:+.2f}"
+                )
+                self.stop_order = None
+                self.buy_price  = None
+            self.order = None
+
+        elif order.status in [order.Canceled, order.Margin, order.Rejected]:
+            self.log(f"  Order {order.Status[order.status]}")
+            self.order = None
+
+    def notify_trade(self, trade):
+        if trade.isclosed:
+            self.log(
+                f"  TRADE closed  gross={trade.pnl:+.2f}  "
+                f"net={trade.pnlcomm:+.2f}"
+            )
+
+    def next(self):
+        """Subclasses must call super().next() to keep the equity curve updated."""
+        self.equity_curve.append(
+            (self.datas[0].datetime.date(0), self.broker.getvalue())
+        )
+
+    def stop(self):
+        self.log(f"  ── Final portfolio value: {self.broker.getvalue():.2f} ──")
