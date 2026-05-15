@@ -1,0 +1,299 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans)}
+.dash{display:flex;flex-direction:column;gap:0}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:0.5px solid var(--color-border-tertiary);position:sticky;top:0;background:var(--color-background-primary);z-index:10}
+.topbar-left{display:flex;align-items:center;gap:12px}
+.topbar-title{font-size:15px;font-weight:500;color:var(--color-text-primary)}
+.topbar-sub{font-size:12px;color:var(--color-text-secondary)}
+.badge{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:500;display:inline-flex;align-items:center;gap:4px}
+.live-badge{background:var(--color-background-danger);color:var(--color-text-danger)}
+.topbar-actions{display:flex;gap:8px}
+.icon-btn{width:32px;height:32px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--color-text-secondary);font-size:16px;transition:background .15s}
+.icon-btn:hover{background:var(--color-background-secondary)}
+.scroll-body{overflow-y:auto;display:flex;flex-direction:column;gap:0}
+.section{padding:16px 20px;border-bottom:0.5px solid var(--color-border-tertiary)}
+.section-label{font-size:11px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;font-weight:500}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.metric{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px 14px;cursor:default;transition:border .15s;border:0.5px solid transparent}
+.metric:hover{border-color:var(--color-border-secondary)}
+.metric-label{font-size:11px;color:var(--color-text-secondary);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;display:flex;align-items:center;gap:5px}
+.metric-value{font-size:22px;font-weight:500;color:var(--color-text-primary);line-height:1}
+.metric-sub{font-size:11px;margin-top:4px;color:var(--color-text-tertiary)}
+.up{color:var(--color-text-success)}
+.down{color:var(--color-text-danger)}
+.chart-wrap{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:14px;position:relative}
+.chart-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.chart-title{font-size:13px;font-weight:500;color:var(--color-text-primary)}
+.timeframe-tabs{display:flex;gap:4px}
+.tf-tab{font-size:11px;padding:3px 9px;border-radius:20px;border:0.5px solid transparent;cursor:pointer;color:var(--color-text-secondary);background:transparent;transition:all .15s}
+.tf-tab.active{background:var(--color-background-primary);color:var(--color-text-primary);border-color:var(--color-border-primary)}
+.chart-canvas{width:100%;height:160px;display:block}
+.strategy-tabs{display:flex;gap:6px;flex-wrap:wrap}
+.stab{font-size:12px;padding:5px 14px;border-radius:20px;border:0.5px solid var(--color-border-secondary);cursor:pointer;color:var(--color-text-secondary);background:transparent;transition:all .15s}
+.stab.active{background:var(--color-background-primary);color:var(--color-text-primary);border-color:var(--color-border-primary);font-weight:500}
+.signals{display:flex;flex-direction:column;gap:6px}
+.signal-row{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);cursor:pointer;transition:border-color .15s}
+.signal-row:hover{border-color:var(--color-border-secondary)}
+.signal-left{display:flex;align-items:center;gap:10px}
+.signal-icon{width:32px;height:32px;border-radius:var(--border-radius-md);display:flex;align-items:center;justify-content:center;font-size:14px;background:var(--color-background-secondary)}
+.signal-ticker{font-size:13px;font-weight:500;color:var(--color-text-primary)}
+.signal-name{font-size:11px;color:var(--color-text-secondary)}
+.signal-mid{flex:1;padding:0 12px}
+.rsi-label{font-size:10px;color:var(--color-text-tertiary);margin-bottom:3px}
+.rsi-bar{height:4px;border-radius:3px;background:var(--color-border-tertiary);overflow:hidden}
+.rsi-fill{height:100%;border-radius:3px;transition:width .4s}
+.signal-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.signal-price{font-size:13px;font-weight:500;color:var(--color-text-primary)}
+.signal-change{font-size:11px}
+.action-pill{font-size:11px;font-weight:500;padding:3px 10px;border-radius:20px}
+.buy{background:var(--color-background-success);color:var(--color-text-success)}
+.sell{background:var(--color-background-danger);color:var(--color-text-danger)}
+.hold{background:var(--color-background-warning);color:var(--color-text-warning)}
+.bottom-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mini-card{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px 14px}
+.mini-title{font-size:11px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.param-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:5px 0;border-bottom:0.5px solid var(--color-border-tertiary)}
+.param-row:last-child{border-bottom:none}
+.param-key{color:var(--color-text-secondary)}
+.param-val{font-weight:500;color:var(--color-text-primary)}
+.exposure-bar{height:6px;border-radius:3px;background:var(--color-border-tertiary);margin-top:6px;overflow:hidden}
+.exposure-fill{height:100%;border-radius:3px;background:var(--color-text-info)}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+.dot-up{background:var(--color-text-success)}
+.dot-down{background:var(--color-text-danger)}
+.dot-hold{background:var(--color-text-warning)}
+</style>
+
+<h2 class="sr-only">Trading strategy dashboard with live signals, price chart, and portfolio metrics</h2>
+
+<div class="dash">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div>
+        <div class="topbar-title">Strategy dashboard</div>
+        <div class="topbar-sub">Portfolio · May 15 2026</div>
+      </div>
+      <span class="badge live-badge"><i class="ti ti-circle-filled" style="font-size:8px" aria-hidden="true"></i> Live</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="icon-btn" title="Refresh"><i class="ti ti-refresh" aria-hidden="true"></i></button>
+      <button class="icon-btn" title="Settings"><i class="ti ti-settings" aria-hidden="true"></i></button>
+      <button class="icon-btn" title="Download"><i class="ti ti-download" aria-hidden="true"></i></button>
+    </div>
+  </div>
+
+  <div class="scroll-body">
+
+    <div class="section">
+      <div class="section-label">Overview</div>
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-label"><i class="ti ti-wallet" style="font-size:13px" aria-hidden="true"></i> Portfolio</div>
+          <div class="metric-value">$84,320</div>
+          <div class="metric-sub up">+2.4% today</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label"><i class="ti ti-trending-up" style="font-size:13px" aria-hidden="true"></i> P&amp;L</div>
+          <div class="metric-value up">+$1,980</div>
+          <div class="metric-sub up">+0.8% MTD</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label"><i class="ti ti-shield" style="font-size:13px" aria-hidden="true"></i> Win rate</div>
+          <div class="metric-value">68%</div>
+          <div class="metric-sub" style="color:var(--color-text-tertiary)">142 trades</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label"><i class="ti ti-bolt" style="font-size:13px" aria-hidden="true"></i> Sharpe</div>
+          <div class="metric-value">1.84</div>
+          <div class="metric-sub up">↑ from 1.61</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="chart-wrap">
+        <div class="chart-header">
+          <span class="chart-title">Equity curve</span>
+          <div class="timeframe-tabs" id="tfTabs">
+            <button class="tf-tab active" data-tf="1D">1D</button>
+            <button class="tf-tab" data-tf="1W">1W</button>
+            <button class="tf-tab" data-tf="1M">1M</button>
+            <button class="tf-tab" data-tf="3M">3M</button>
+          </div>
+        </div>
+        <canvas class="chart-canvas" id="equityChart"></canvas>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Strategy filter</div>
+      <div class="strategy-tabs" id="stratTabs">
+        <button class="stab active" data-s="all">All signals</button>
+        <button class="stab" data-s="momentum">Momentum</button>
+        <button class="stab" data-s="mean-rev">Mean reversion</button>
+        <button class="stab" data-s="breakout">Breakout</button>
+        <button class="stab" data-s="arbitrage">Arbitrage</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Live signals</div>
+      <div class="signals" id="signalList"></div>
+    </div>
+
+    <div class="section">
+      <div class="bottom-grid">
+        <div class="mini-card">
+          <div class="mini-title"><i class="ti ti-adjustments" aria-hidden="true"></i> Parameters</div>
+          <div class="param-row"><span class="param-key">Stop loss</span><span class="param-val">2.5%</span></div>
+          <div class="param-row"><span class="param-key">Take profit</span><span class="param-val">6.0%</span></div>
+          <div class="param-row"><span class="param-key">Max drawdown</span><span class="param-val">12%</span></div>
+          <div class="param-row"><span class="param-key">Leverage</span><span class="param-val">1.5×</span></div>
+          <div class="param-row"><span class="param-key">Rebalance</span><span class="param-val">Daily</span></div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-title"><i class="ti ti-chart-pie" aria-hidden="true"></i> Exposure</div>
+          <div class="param-row">
+            <span class="param-key"><span class="dot dot-up"></span> Long</span>
+            <span class="param-val up">62%</span>
+          </div>
+          <div class="exposure-bar"><div class="exposure-fill" style="width:62%;background:var(--color-text-success)"></div></div>
+          <div class="param-row" style="margin-top:8px">
+            <span class="param-key"><span class="dot dot-down"></span> Short</span>
+            <span class="param-val down">28%</span>
+          </div>
+          <div class="exposure-bar"><div class="exposure-fill" style="width:28%;background:var(--color-text-danger)"></div></div>
+          <div class="param-row" style="margin-top:8px">
+            <span class="param-key"><span class="dot dot-hold"></span> Cash</span>
+            <span class="param-val">10%</span>
+          </div>
+          <div class="exposure-bar"><div class="exposure-fill" style="width:10%;background:var(--color-text-warning)"></div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const allSignals = [
+  {ticker:'NVDA',name:'Nvidia Corp',price:'$892.40',change:'+3.2%',up:true,rsi:72,action:'buy',strategy:'momentum'},
+  {ticker:'TSLA',name:'Tesla Inc',price:'$241.10',change:'-1.8%',up:false,rsi:38,action:'sell',strategy:'mean-rev'},
+  {ticker:'AAPL',name:'Apple Inc',price:'$198.75',change:'+0.4%',up:true,rsi:54,action:'hold',strategy:'breakout'},
+  {ticker:'MSFT',name:'Microsoft Corp',price:'$415.60',change:'+1.1%',up:true,rsi:66,action:'buy',strategy:'momentum'},
+  {ticker:'AMZN',name:'Amazon.com',price:'$184.20',change:'+0.7%',up:true,rsi:58,action:'hold',strategy:'mean-rev'},
+  {ticker:'GOOG',name:'Alphabet Inc',price:'$168.90',change:'-0.3%',up:false,rsi:49,action:'hold',strategy:'arbitrage'},
+  {ticker:'META',name:'Meta Platforms',price:'$523.80',change:'+2.1%',up:true,rsi:70,action:'buy',strategy:'breakout'},
+  {ticker:'NFLX',name:'Netflix Inc',price:'$634.50',change:'-0.9%',up:false,rsi:41,action:'sell',strategy:'mean-rev'},
+];
+const icons = {buy:'ti-trending-up',sell:'ti-trending-down',hold:'ti-minus'};
+let activeStrat = 'all';
+
+function renderSignals(){
+  const list = document.getElementById('signalList');
+  const filtered = activeStrat === 'all' ? allSignals : allSignals.filter(s => s.strategy === activeStrat);
+  list.innerHTML = filtered.map(s => `
+    <div class="signal-row">
+      <div class="signal-left">
+        <div class="signal-icon"><i class="ti ${icons[s.action]}" aria-hidden="true"></i></div>
+        <div>
+          <div class="signal-ticker">${s.ticker}</div>
+          <div class="signal-name">${s.name}</div>
+        </div>
+      </div>
+      <div class="signal-mid">
+        <div class="rsi-label">RSI ${s.rsi}</div>
+        <div class="rsi-bar"><div class="rsi-fill" style="width:${s.rsi}%;background:${s.rsi>70?'var(--color-text-danger)':s.rsi<30?'var(--color-text-success)':'var(--color-text-warning)'}"></div></div>
+      </div>
+      <div class="signal-right">
+        <div class="signal-price">${s.price}</div>
+        <div class="signal-change ${s.up?'up':'down'}">${s.change}</div>
+        <span class="action-pill ${s.action}">${s.action.toUpperCase()}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+document.getElementById('stratTabs').addEventListener('click', e => {
+  const btn = e.target.closest('.stab');
+  if(!btn) return;
+  document.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeStrat = btn.dataset.s;
+  renderSignals();
+});
+
+document.getElementById('tfTabs').addEventListener('click', e => {
+  const btn = e.target.closest('.tf-tab');
+  if(!btn) return;
+  document.querySelectorAll('.tf-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  drawChart(btn.dataset.tf);
+});
+
+const chartData = {
+  '1D': [82200,82400,82100,82800,83200,82900,83600,84100,83800,84320],
+  '1W': [80100,81200,80800,82400,81900,83100,84320],
+  '1M': [76000,77500,79200,78400,80100,81800,80500,82900,84320],
+  '3M': [68000,70500,72000,75000,74200,77000,76500,79000,81200,84320],
+};
+
+function drawChart(tf){
+  const canvas = document.getElementById('equityChart');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.offsetWidth;
+  const h = canvas.offsetHeight;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  ctx.scale(dpr, dpr);
+  const pts = chartData[tf];
+  const min = Math.min(...pts) * 0.998;
+  const max = Math.max(...pts) * 1.002;
+  const padL = 0, padR = 8, padT = 8, padB = 20;
+  const cw = w - padL - padR;
+  const ch = h - padT - padB;
+  ctx.clearRect(0,0,w,h);
+  const style = getComputedStyle(document.documentElement);
+  const textColor = style.getPropertyValue('--color-text-tertiary') || '#999';
+  ctx.strokeStyle = 'rgba(128,128,128,0.15)';
+  ctx.lineWidth = 0.5;
+  [0.25,0.5,0.75,1].forEach(r => {
+    const y = padT + ch * r;
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(w-padR,y); ctx.stroke();
+    const val = max - (max-min)*r;
+    ctx.fillStyle = textColor;
+    ctx.font = '10px var(--font-sans)';
+    ctx.textAlign = 'right';
+    ctx.fillText('$'+Math.round(val/100)*100,w-padR,y-3);
+  });
+  const toX = i => padL + (i/(pts.length-1))*cw;
+  const toY = v => padT + ch * (1 - (v-min)/(max-min));
+  ctx.beginPath();
+  ctx.moveTo(toX(0), toY(pts[0]));
+  pts.forEach((v,i) => { if(i>0) ctx.lineTo(toX(i), toY(v)); });
+  ctx.strokeStyle = pts[pts.length-1] >= pts[0] ? '#22c55e' : '#ef4444';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  const grad = ctx.createLinearGradient(0,padT,0,padT+ch);
+  grad.addColorStop(0, pts[pts.length-1] >= pts[0] ? 'rgba(34,197,94,0.18)' : 'rgba(239,68,68,0.18)');
+  grad.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.beginPath();
+  ctx.moveTo(toX(0), toY(pts[0]));
+  pts.forEach((v,i) => { if(i>0) ctx.lineTo(toX(i), toY(v)); });
+  ctx.lineTo(toX(pts.length-1), padT+ch);
+  ctx.lineTo(toX(0), padT+ch);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+}
+
+renderSignals();
+setTimeout(() => drawChart('1D'), 100);
+window.addEventListener('resize', () => {
+  const active = document.querySelector('.tf-tab.active');
+  if(active) drawChart(active.dataset.tf);
+});
+</script>
